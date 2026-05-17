@@ -14,7 +14,8 @@ import remarkGfm from "remark-gfm";
 import {
   DndContext,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   useSensor,
   useSensors,
@@ -66,6 +67,15 @@ function SparkleIcon() {
   return (
     <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 2v6M12 16v6M2 12h6M16 12h6M5 5l3.5 3.5M15.5 15.5L19 19M5 19l3.5-3.5M15.5 8.5L19 5" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
     </svg>
   );
 }
@@ -193,23 +203,35 @@ function SortableBlock({
   photoUrl,
   isEditing,
   editUI,
+  isDirectEditing,
+  directEditText,
   onStartEdit,
   onCancelEdit,
   onInstructionChange,
   onApplyEdit,
   onKeepEdit,
   onResetEdit,
+  onStartDirectEdit,
+  onDirectEditChange,
+  onSaveDirectEdit,
+  onCancelDirectEdit,
 }: {
   block: Block;
   photoUrl: string | undefined;
   isEditing: boolean;
   editUI: BlockEditUI | null;
+  isDirectEditing: boolean;
+  directEditText: string;
   onStartEdit: () => void;
   onCancelEdit: () => void;
   onInstructionChange: (v: string) => void;
   onApplyEdit: () => void;
   onKeepEdit: () => void;
   onResetEdit: () => void;
+  onStartDirectEdit: () => void;
+  onDirectEditChange: (v: string) => void;
+  onSaveDirectEdit: () => void;
+  onCancelDirectEdit: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: block.id });
@@ -217,9 +239,11 @@ function SortableBlock({
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
+    touchAction: "none",
   };
 
   const canEdit = block.kind === "p" || block.kind === "h2";
+  const showActions = canEdit && !isEditing && !isDirectEditing;
 
   return (
     <div
@@ -228,43 +252,86 @@ function SortableBlock({
       className={cn(
         "group relative rounded-md transition-colors px-3 -mx-3",
         "hover:bg-muted/40",
-        isEditing && "bg-primary/5 ring-1 ring-primary/20",
+        (isEditing || isDirectEditing) && "bg-primary/5 ring-1 ring-primary/20",
         isDragging && "opacity-50 z-10",
       )}
     >
-      {/* 좌측 드래그 핸들 */}
+      {/* 좌측 드래그 핸들 — 모바일에선 항상 보임, 데스크탑은 hover */}
       <button
         type="button"
         {...attributes}
         {...listeners}
+        style={{ touchAction: "none" }}
         className={cn(
-          "absolute -left-4 top-1.5 hidden sm:flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground",
-          "opacity-0 group-hover:opacity-100 transition-opacity",
-          "hover:bg-muted hover:text-foreground cursor-grab active:cursor-grabbing",
-          block.kind === "photo" && "opacity-60",
+          "absolute -left-7 sm:-left-4 top-1.5 flex h-7 w-7 sm:h-6 sm:w-6 items-center justify-center rounded-md text-muted-foreground",
+          "opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
+          "active:bg-primary/20 hover:bg-muted hover:text-foreground cursor-grab active:cursor-grabbing",
         )}
-        aria-label="블럭 이동"
+        aria-label="블럭 이동 (모바일은 길게 눌러 드래그)"
       >
         <GripIcon />
       </button>
 
-      {/* 우측 AI 수정 버튼 */}
-      {canEdit && !isEditing && (
-        <button
-          type="button"
-          onClick={onStartEdit}
+      {/* 우측 액션 버튼들 — 모바일은 항상, 데스크탑은 hover */}
+      {showActions && (
+        <div
           className={cn(
-            "absolute right-2 top-1.5 hidden sm:inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground",
-            "opacity-0 group-hover:opacity-100 transition-opacity",
-            "hover:border-primary hover:text-primary",
+            "absolute right-1 top-1.5 flex items-center gap-1",
+            "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
           )}
         >
-          <SparkleIcon />
-          AI 수정
-        </button>
+          <button
+            type="button"
+            onClick={onStartDirectEdit}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
+          >
+            <PencilIcon />
+            <span className="hidden sm:inline">직접 수정</span>
+          </button>
+          <button
+            type="button"
+            onClick={onStartEdit}
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
+          >
+            <SparkleIcon />
+            <span className="hidden sm:inline">AI 수정</span>
+          </button>
+        </div>
       )}
 
-      <BlockContent block={block} photoUrl={photoUrl} />
+      {isDirectEditing ? (
+        <div className="my-3 space-y-2">
+          <textarea
+            value={directEditText}
+            onChange={(e) => onDirectEditChange(e.target.value)}
+            rows={Math.max(3, directEditText.split("\n").length + 1)}
+            autoFocus
+            className="w-full rounded-md border border-primary/40 bg-surface px-3 py-2 text-sm leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            placeholder={
+              block.kind === "h2" ? "소제목을 입력하세요" : "단락 내용을 입력하세요"
+            }
+          />
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={onCancelDirectEdit}
+              className="rounded-md border border-border bg-surface px-3 py-1.5 text-xs hover:bg-muted"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={onSaveDirectEdit}
+              disabled={!directEditText.trim()}
+              className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-hover shadow-soft disabled:opacity-50"
+            >
+              저장
+            </button>
+          </div>
+        </div>
+      ) : (
+        <BlockContent block={block} photoUrl={photoUrl} />
+      )}
 
       {/* 편집 패널 */}
       {canEdit && isEditing && editUI && (
@@ -366,6 +433,10 @@ export function BlockEditor({ draftId, body, photos }: Props) {
   const [blockEditUI, setBlockEditUI] = useState<BlockEditUI | null>(null);
   const blockAbortRef = useRef<AbortController | null>(null);
 
+  // 직접 수정 모드 (AI 안 거치고 사용자가 직접 텍스트 편집)
+  const [directEditBlockId, setDirectEditBlockId] = useState<string | null>(null);
+  const [directEditText, setDirectEditText] = useState("");
+
   // Global revise state
   const [globalInstruction, setGlobalInstruction] = useState("");
   const [globalUI, setGlobalUI] = useState<{
@@ -384,11 +455,18 @@ export function BlockEditor({ draftId, body, photos }: Props) {
     setSaveState("idle");
     setEditingBlockId(null);
     setBlockEditUI(null);
+    setDirectEditBlockId(null);
+    setDirectEditText("");
     setGlobalUI(null);
   }, [body]);
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    // 데스크탑 마우스: 5px 이상 움직여야 드래그 (실수 클릭 방지)
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    // 모바일 터치: 200ms 길게 누른 뒤 드래그 (스크롤과 충돌 방지)
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 8 },
+    }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
@@ -531,6 +609,44 @@ export function BlockEditor({ draftId, body, photos }: Props) {
     setBlockEditUI(null);
   };
 
+  // ---- Direct text edit (AI 거치지 않고 사용자가 직접 편집) ----
+  const startDirectEdit = (blockId: string) => {
+    const block = blocks.find((b) => b.id === blockId);
+    if (!block || (block.kind !== "p" && block.kind !== "h2")) return;
+    // AI 수정 패널이 열려있으면 닫기
+    blockAbortRef.current?.abort();
+    setEditingBlockId(null);
+    setBlockEditUI(null);
+    setDirectEditBlockId(blockId);
+    setDirectEditText(block.text);
+  };
+
+  const cancelDirectEdit = () => {
+    setDirectEditBlockId(null);
+    setDirectEditText("");
+  };
+
+  const saveDirectEdit = () => {
+    if (!directEditBlockId) return;
+    const trimmed = directEditText.trim();
+    if (!trimmed) return;
+    setBlocks((current) => {
+      const idx = current.findIndex((b) => b.id === directEditBlockId);
+      if (idx < 0) return current;
+      const updated = [...current];
+      const target = updated[idx];
+      if (target.kind === "h2") {
+        updated[idx] = { ...target, text: trimmed.replace(/^##\s+/, "") };
+      } else if (target.kind === "p") {
+        updated[idx] = { ...target, text: trimmed };
+      }
+      queueSave(updated);
+      return updated;
+    });
+    setDirectEditBlockId(null);
+    setDirectEditText("");
+  };
+
   // ---- Global revise ----
   const startGlobalRevise = async () => {
     if (!globalInstruction.trim()) return;
@@ -614,6 +730,8 @@ export function BlockEditor({ draftId, body, photos }: Props) {
                   }
                   isEditing={editingBlockId === b.id}
                   editUI={editingBlockId === b.id ? blockEditUI : null}
+                  isDirectEditing={directEditBlockId === b.id}
+                  directEditText={directEditBlockId === b.id ? directEditText : ""}
                   onStartEdit={() => startBlockEdit(b.id)}
                   onCancelEdit={cancelBlockEdit}
                   onInstructionChange={(v) =>
@@ -622,6 +740,10 @@ export function BlockEditor({ draftId, body, photos }: Props) {
                   onApplyEdit={applyBlockEdit}
                   onKeepEdit={keepBlockEdit}
                   onResetEdit={resetBlockEdit}
+                  onStartDirectEdit={() => startDirectEdit(b.id)}
+                  onDirectEditChange={setDirectEditText}
+                  onSaveDirectEdit={saveDirectEdit}
+                  onCancelDirectEdit={cancelDirectEdit}
                 />
               ))}
             </div>
