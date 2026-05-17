@@ -31,7 +31,7 @@ export const draftFormSchema = z.object({
     .max(500, "메모는 500자 이하로 부탁드려요")
     .optional()
     .or(z.literal("")),
-  keywords: z.array(z.string().min(1).max(20)).max(10).default([]),
+  keywords: z.array(z.string().min(1).max(20)).max(10),
   place: placeSchema.optional(),
 });
 
