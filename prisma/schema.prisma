@@ -1,0 +1,67 @@
+// foodie-autopost schema
+// 변경 시: npx prisma migrate dev --name <설명>
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Draft {
+  id          String   @id @default(cuid())
+  status      Status   @default(DRAFTING)
+
+  mood        String?
+  keywords    String[]
+
+  placeName   String?
+  placeAddr   String?
+  placeUrl    String?
+  placeLat    Float?
+  placeLng    Float?
+
+  photos      Photo[]
+
+  title           String?
+  reviewHtml      String?  @db.Text
+  reviewMarkdown  String?  @db.Text
+
+  seoSummary  String?  @db.Text
+  seoCategory String?
+  seoTags     String[]
+
+  llmProvider String?
+  llmModel    String?
+
+  publishedTo String?
+  publishedAt DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Photo {
+  id        String   @id @default(cuid())
+  draftId   String
+  draft     Draft    @relation(fields: [draftId], references: [id], onDelete: Cascade)
+
+  storageKey String
+  publicUrl  String?
+  mimeType   String
+  width      Int?
+  height     Int?
+  order      Int      @default(0)
+
+  createdAt  DateTime @default(now())
+}
+
+enum Status {
+  DRAFTING
+  GENERATING
+  READY
+  PUBLISHED
+  FAILED
+}
