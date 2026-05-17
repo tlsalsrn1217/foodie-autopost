@@ -9,12 +9,12 @@ import {
   draftFormSchema,
   type DraftFormValues,
 } from "@/lib/schemas/draftFormSchema";
+import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { PhotoDropzone } from "@/components/compose/PhotoDropzone";
 import { MoodInput } from "@/components/compose/MoodInput";
 import { KeywordChips } from "@/components/compose/KeywordChips";
 import { PlacePicker } from "@/components/compose/PlacePicker";
 import { Button } from "@/components/ui/Button";
-import { Label } from "@/components/ui/Label";
 import {
   Card,
   CardContent,
@@ -23,9 +23,17 @@ import {
   CardTitle,
 } from "@/components/ui/Card";
 
+type Stage =
+  | { kind: "idle" }
+  | { kind: "creating" } // /api/draft 호출 중
+  | { kind: "signing" } // /api/draft/[id]/upload-urls 호출 중
+  | { kind: "uploading"; done: number; total: number } // 사진 직접 업로드 진행
+  | { kind: "committing" } // /api/draft/[id]/photos 기록 중
+  | { kind: "error"; message: string };
+
 export default function ComposePage() {
   const router = useRouter();
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [stage, setStage] = useState<Stage>({ kind: "idle" });
 
   const {
     control,
@@ -41,24 +49,106 @@ export default function ComposePage() {
     },
   });
 
-  const onSubmit = async (values: DraftFormValues) => {
-    setSubmitError(null);
-    try {
-      const fd = new FormData();
-      values.photos.forEach((f) => fd.append("photos", f));
-      fd.append("mood", values.mood ?? "");
-      fd.append("keywords", JSON.stringify(values.keywords));
-      if (values.place) fd.append("place", JSON.stringify(values.place));
+  async function uploadOnePhoto(slot: {
+    storageKey: string;
+    token: string;
+    mimeType: string;
+  }, file: File) {
+    const supabase = getSupabaseBrowser();
+    const { error } = await supabase.storage
+      .from("photos")
+      .uploadToSignedUrl(slot.storageKey, slot.token, file, {
+        contentType: file.type || slot.mimeType,
+        upsert: true,
+      });
+    if (error) throw new Error(`사진 업로드 실패: ${error.message}`);
+  }
 
-      const res = await fetch("/api/draft", { method: "POST", body: fd });
-      if (!res.ok) throw new Error(await res.text());
-      const { draftId } = (await res.json()) as { draftId: string };
+  const onSubmit = async (values: DraftFormValues) => {
+    try {
+      // 1) Draft 메타데이터 먼저 생성 (사진은 별도로 직접 업로드 후 첨부)
+      setStage({ kind: "creating" });
+      const createRes = await fetch("/api/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mood: values.mood ?? "",
+          keywords: values.keywords,
+          place: values.place,
+        }),
+      });
+      if (!createRes.ok) throw new Error(`Draft 생성 실패 (${createRes.status})`);
+      const { draftId } = (await createRes.json()) as { draftId: string };
+
+      // 2) signed upload URL 발급 (서버 → Supabase)
+      setStage({ kind: "signing" });
+      const signRes = await fetch(`/api/draft/${draftId}/upload-urls`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          files: values.photos.map((f) => ({
+            mimeType: f.type || "image/jpeg",
+            filename: f.name,
+          })),
+        }),
+      });
+      if (!signRes.ok) throw new Error(`upload URL 발급 실패 (${signRes.status})`);
+      const { slots } = (await signRes.json()) as {
+        slots: Array<{
+          order: number;
+          storageKey: string;
+          publicUrl: string;
+          token: string;
+          mimeType: string;
+        }>;
+      };
+
+      // 3) 브라우저 → Supabase 직접 업로드 (Vercel 4.5MB 한도 우회)
+      setStage({ kind: "uploading", done: 0, total: slots.length });
+      let done = 0;
+      // 동시 업로드 — 모바일 네트워크 고려해 4개씩 묶음
+      const queue = [...slots];
+      const workers: Promise<void>[] = [];
+      const CONCURRENCY = 4;
+      for (let i = 0; i < CONCURRENCY; i++) {
+        workers.push(
+          (async () => {
+            while (queue.length > 0) {
+              const slot = queue.shift();
+              if (!slot) break;
+              await uploadOnePhoto(slot, values.photos[slot.order]);
+              done++;
+              setStage({ kind: "uploading", done, total: slots.length });
+            }
+          })(),
+        );
+      }
+      await Promise.all(workers);
+
+      // 4) Photo 레코드 생성 (서버에 결과 통보)
+      setStage({ kind: "committing" });
+      const commitRes = await fetch(`/api/draft/${draftId}/photos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          photos: slots.map((s) => ({
+            order: s.order,
+            storageKey: s.storageKey,
+            publicUrl: s.publicUrl,
+            mimeType: s.mimeType,
+          })),
+        }),
+      });
+      if (!commitRes.ok) throw new Error(`사진 등록 실패 (${commitRes.status})`);
+
       router.push(`/preview/${draftId}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "저장에 실패했어요";
-      setSubmitError(msg);
+      setStage({ kind: "error", message: msg });
     }
   };
+
+  const isBusy = stage.kind !== "idle" && stage.kind !== "error";
 
   return (
     <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-16">
@@ -158,9 +248,28 @@ export default function ComposePage() {
           </CardContent>
         </Card>
 
-        {submitError && (
+        {stage.kind !== "idle" && stage.kind !== "error" && (
+          <div className="rounded-md border border-primary/40 bg-primary/5 px-4 py-3 text-sm">
+            {stage.kind === "creating" && "초안 생성 중..."}
+            {stage.kind === "signing" && "사진 업로드 준비 중..."}
+            {stage.kind === "uploading" && (
+              <>
+                사진 업로드 중 ({stage.done}/{stage.total})
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-primary/20">
+                  <div
+                    className="h-full bg-primary transition-all duration-200"
+                    style={{ width: `${(stage.done / stage.total) * 100}%` }}
+                  />
+                </div>
+              </>
+            )}
+            {stage.kind === "committing" && "최종 정리 중..."}
+          </div>
+        )}
+
+        {stage.kind === "error" && (
           <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger">
-            {submitError}
+            {stage.message}
           </div>
         )}
 
@@ -169,12 +278,12 @@ export default function ComposePage() {
             type="button"
             variant="ghost"
             onClick={() => router.push("/")}
-            disabled={isSubmitting}
+            disabled={isBusy || isSubmitting}
           >
             취소
           </Button>
-          <Button type="submit" size="lg" disabled={isSubmitting}>
-            {isSubmitting ? "저장 중..." : "AI 리뷰 생성 →"}
+          <Button type="submit" size="lg" disabled={isBusy || isSubmitting}>
+            {isBusy ? "처리 중..." : "AI 리뷰 생성 →"}
           </Button>
         </div>
       </form>
