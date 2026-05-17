@@ -48,10 +48,15 @@ npm run dev
    - Framework Preset: **Next.js** 자동 감지
 
 3. **환경변수 설정** — Vercel 프로젝트 Settings → Environment Variables에 `.env.example`의 모든 키 추가.
-   특히 `DATABASE_URL`은 **Transaction pooler (port 6543)** 변형 사용:
-   ```
-   postgresql://postgres.<REF>:<PW>@aws-1-<REGION>.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1
-   ```
+   특히 다음 두 가지에 주의:
+
+   - `DATABASE_URL`은 **Transaction pooler (port 6543)** 변형 사용:
+     ```
+     postgresql://postgres.<REF>:<PW>@aws-1-<REGION>.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1
+     ```
+   - `APP_PASSWORD`는 **반드시 설정** — 안 하면 누구나 URL로 접속 가능.
+     아무 문자열이나 길게 (영문+숫자+특수문자 조합 권장). 사용자명은 어느 것이든 OK.
+     향후 Phase 6에서 Supabase Auth 로 교체 예정.
 
 4. **Deploy** 클릭 → 빌드 완료 후 `https://your-project.vercel.app` 자동 발급.
 
