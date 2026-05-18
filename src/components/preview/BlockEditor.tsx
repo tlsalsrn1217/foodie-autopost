@@ -201,6 +201,7 @@ function BlockContent({
 function SortableBlock({
   block,
   photoUrl,
+  isEditMode,
   isEditing,
   editUI,
   isDirectEditing,
@@ -218,6 +219,7 @@ function SortableBlock({
 }: {
   block: Block;
   photoUrl: string | undefined;
+  isEditMode: boolean;
   isEditing: boolean;
   editUI: BlockEditUI | null;
   isDirectEditing: boolean;
@@ -243,7 +245,8 @@ function SortableBlock({
   };
 
   const canEdit = block.kind === "p" || block.kind === "h2";
-  const showActions = canEdit && !isEditing && !isDirectEditing;
+  const showActions = isEditMode && canEdit && !isEditing && !isDirectEditing;
+  const showDragHandle = isEditMode;
 
   return (
     <div
@@ -256,21 +259,23 @@ function SortableBlock({
         isDragging && "opacity-50 z-10",
       )}
     >
-      {/* 좌측 드래그 핸들 — 모바일에선 항상 보임, 데스크탑은 hover */}
-      <button
-        type="button"
-        {...attributes}
-        {...listeners}
-        style={{ touchAction: "none" }}
-        className={cn(
-          "absolute -left-7 sm:-left-4 top-1.5 flex h-7 w-7 sm:h-6 sm:w-6 items-center justify-center rounded-md text-muted-foreground",
-          "opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
-          "active:bg-primary/20 hover:bg-muted hover:text-foreground cursor-grab active:cursor-grabbing",
-        )}
-        aria-label="블럭 이동 (모바일은 길게 눌러 드래그)"
-      >
-        <GripIcon />
-      </button>
+      {/* 좌측 드래그 핸들 — 수정 모드에서만, 모바일은 항상 보임, 데스크탑은 hover */}
+      {showDragHandle && (
+        <button
+          type="button"
+          {...attributes}
+          {...listeners}
+          style={{ touchAction: "none" }}
+          className={cn(
+            "absolute -left-7 sm:-left-4 top-1.5 flex h-7 w-7 sm:h-6 sm:w-6 items-center justify-center rounded-md text-muted-foreground",
+            "opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
+            "active:bg-primary/20 hover:bg-muted hover:text-foreground cursor-grab active:cursor-grabbing",
+          )}
+          aria-label="블럭 이동 (모바일은 길게 눌러 드래그)"
+        >
+          <GripIcon />
+        </button>
+      )}
 
       {isDirectEditing ? (
         <div className="my-3 space-y-2">
@@ -438,6 +443,21 @@ export function BlockEditor({ draftId, body, photos }: Props) {
   // 직접 수정 모드 (AI 안 거치고 사용자가 직접 텍스트 편집)
   const [directEditBlockId, setDirectEditBlockId] = useState<string | null>(null);
   const [directEditText, setDirectEditText] = useState("");
+
+  // 수정 모드 토글 — 기본은 읽기 모드, "수정하기" 버튼으로 진입
+  const [isEditMode, setIsEditMode] = useState(false);
+
+  const exitEditMode = () => {
+    blockAbortRef.current?.abort();
+    globalAbortRef.current?.abort();
+    setEditingBlockId(null);
+    setBlockEditUI(null);
+    setDirectEditBlockId(null);
+    setDirectEditText("");
+    setGlobalUI(null);
+    setGlobalInstruction("");
+    setIsEditMode(false);
+  };
 
   // Global revise state
   const [globalInstruction, setGlobalInstruction] = useState("");
@@ -702,15 +722,37 @@ export function BlockEditor({ draftId, body, photos }: Props) {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-border bg-surface p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-4 gap-3">
           <span className="text-[10px] text-muted-foreground">
-            블럭을 드래그하거나 "AI 수정"으로 단락을 다듬어보세요
+            {isEditMode
+              ? "블럭을 드래그하거나 직접/AI 수정 버튼으로 다듬어보세요"
+              : "저장된 글입니다. 수정하려면 우측 \"수정하기\" 버튼을 누르세요."}
           </span>
-          <span className="text-[10px] text-muted-foreground">
-            {saveState === "saving" && "저장 중…"}
-            {saveState === "saved" && <span className="text-success">저장됨</span>}
-            {saveState === "error" && <span className="text-danger">저장 실패</span>}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-muted-foreground">
+              {saveState === "saving" && "저장 중…"}
+              {saveState === "saved" && <span className="text-success">저장됨</span>}
+              {saveState === "error" && <span className="text-danger">저장 실패</span>}
+            </span>
+            {!isEditMode ? (
+              <button
+                type="button"
+                onClick={() => setIsEditMode(true)}
+                className="inline-flex items-center gap-1 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary-hover shadow-soft"
+              >
+                <PencilIcon />
+                수정하기
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={exitEditMode}
+                className="inline-flex items-center gap-1 rounded-md border border-success/40 bg-success/10 px-3 py-1.5 text-xs font-medium text-success hover:bg-success/20"
+              >
+                ✓ 수정 완료
+              </button>
+            )}
+          </div>
         </div>
 
         <DndContext
@@ -730,6 +772,7 @@ export function BlockEditor({ draftId, body, photos }: Props) {
                   photoUrl={
                     b.kind === "photo" ? photoUrlMap.get(b.photoNumber) : undefined
                   }
+                  isEditMode={isEditMode}
                   isEditing={editingBlockId === b.id}
                   editUI={editingBlockId === b.id ? blockEditUI : null}
                   isDirectEditing={directEditBlockId === b.id}
@@ -753,7 +796,8 @@ export function BlockEditor({ draftId, body, photos }: Props) {
         </DndContext>
       </div>
 
-      {/* 전체 수정 패널 */}
+      {/* 전체 수정 패널 — 수정 모드에서만 노출 */}
+      {isEditMode && (
       <div className="rounded-xl border border-accent/30 bg-accent/5 p-5 space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -843,6 +887,7 @@ export function BlockEditor({ draftId, body, photos }: Props) {
           ) : null}
         </div>
       </div>
+      )}
     </div>
   );
 }
