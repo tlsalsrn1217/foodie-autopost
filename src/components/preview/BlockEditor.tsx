@@ -272,33 +272,6 @@ function SortableBlock({
         <GripIcon />
       </button>
 
-      {/* 우측 액션 버튼들 — 모바일은 항상, 데스크탑은 hover */}
-      {showActions && (
-        <div
-          className={cn(
-            "absolute right-1 top-1.5 flex items-center gap-1",
-            "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
-          )}
-        >
-          <button
-            type="button"
-            onClick={onStartDirectEdit}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
-          >
-            <PencilIcon />
-            <span className="hidden sm:inline">직접 수정</span>
-          </button>
-          <button
-            type="button"
-            onClick={onStartEdit}
-            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
-          >
-            <SparkleIcon />
-            <span className="hidden sm:inline">AI 수정</span>
-          </button>
-        </div>
-      )}
-
       {isDirectEditing ? (
         <div className="my-3 space-y-2">
           <textarea
@@ -331,6 +304,35 @@ function SortableBlock({
         </div>
       ) : (
         <BlockContent block={block} photoUrl={photoUrl} />
+      )}
+
+      {/* 액션 버튼들 — 본문 아래 별도 줄. 모바일 항상, 데스크탑 hover */}
+      {showActions && (
+        <div
+          className={cn(
+            "flex items-center justify-end gap-1.5 pt-1 pb-2",
+            "opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity",
+          )}
+        >
+          <button
+            type="button"
+            onClick={onStartDirectEdit}
+            title="직접 수정 — 텍스트박스에서 직접 타이핑"
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
+          >
+            <PencilIcon />
+            <span>직접 수정</span>
+          </button>
+          <button
+            type="button"
+            onClick={onStartEdit}
+            title="AI 수정 — 지시문으로 다듬기"
+            className="inline-flex items-center gap-1 rounded-md border border-border bg-surface px-2 py-1 text-[10px] text-muted-foreground hover:border-primary hover:text-primary"
+          >
+            <SparkleIcon />
+            <span>AI 수정</span>
+          </button>
+        </div>
       )}
 
       {/* 편집 패널 */}
