@@ -1,5 +1,11 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
+import { DraftCard } from "@/components/drafts/DraftCard";
+import {
+  CategoryBarsChart,
+  MonthlyTrendChart,
+  StatusDonutChart,
+} from "@/components/dashboard/DashboardCharts";
 
 export const dynamic = "force-dynamic";
 
@@ -12,32 +18,6 @@ function getGreeting() {
   if (hour < 22) return "오늘 저녁은 어땠나요";
   return "오늘 하루 수고하셨어요";
 }
-
-function formatRelative(d: Date) {
-  const now = Date.now();
-  const diff = (now - d.getTime()) / 1000;
-  if (diff < 60) return "방금 전";
-  if (diff < 3600) return `${Math.floor(diff / 60)}분 전`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}시간 전`;
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}일 전`;
-  return d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  DRAFTING: "초안",
-  GENERATING: "생성 중",
-  READY: "완성",
-  PUBLISHED: "발행됨",
-  FAILED: "실패",
-};
-
-const STATUS_STYLE: Record<string, string> = {
-  DRAFTING: "bg-muted text-muted-foreground",
-  GENERATING: "bg-accent/15 text-accent",
-  READY: "bg-primary/10 text-primary",
-  PUBLISHED: "bg-success/15 text-success",
-  FAILED: "bg-danger/15 text-danger",
-};
 
 type StatProps = { label: string; value: number | string; sub?: string };
 function StatCard({ label, value, sub }: StatProps) {
@@ -54,6 +34,14 @@ function StatCard({ label, value, sub }: StatProps) {
   );
 }
 
+function startOfMonthKST(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function monthLabel(d: Date) {
+  return `${d.getMonth() + 1}월`;
+}
+
 export default async function DashboardHome() {
   const greeting = getGreeting();
 
@@ -61,12 +49,13 @@ export default async function DashboardHome() {
   const weekStart = new Date(now);
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
   weekStart.setHours(0, 0, 0, 0);
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthStart = startOfMonthKST(now);
+  const sixMonthsAgo = startOfMonthKST(new Date(now.getFullYear(), now.getMonth() - 5, 1));
 
-  const [recentDrafts, totalCount, weekCount, monthCount] = await Promise.all([
+  const [recentDrafts, totalCount, weekCount, monthCount, allForCharts] = await Promise.all([
     prisma.draft.findMany({
       orderBy: { updatedAt: "desc" },
-      take: 12,
+      take: 9,
       include: {
         photos: {
           orderBy: { order: "asc" },
@@ -77,7 +66,47 @@ export default async function DashboardHome() {
     prisma.draft.count(),
     prisma.draft.count({ where: { createdAt: { gte: weekStart } } }),
     prisma.draft.count({ where: { createdAt: { gte: monthStart } } }),
+    prisma.draft.findMany({
+      where: { createdAt: { gte: sixMonthsAgo } },
+      select: { createdAt: true, status: true, seoCategory: true },
+    }),
   ]);
+
+  // 월별 작성 추이 (최근 6개월)
+  const monthlyBuckets: Array<{ key: string; month: string; count: number }> = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    monthlyBuckets.push({ key, month: monthLabel(d), count: 0 });
+  }
+  for (const d of allForCharts) {
+    const key = `${d.createdAt.getFullYear()}-${String(d.createdAt.getMonth() + 1).padStart(2, "0")}`;
+    const b = monthlyBuckets.find((x) => x.key === key);
+    if (b) b.count++;
+  }
+
+  // 상태별 분포 (전체 데이터 기준으로 다시 집계)
+  const statusBuckets = await prisma.draft.groupBy({
+    by: ["status"],
+    _count: { _all: true },
+  });
+  const statusData = statusBuckets.map((b) => ({
+    status: b.status,
+    count: b._count._all,
+  }));
+
+  // 카테고리별 분포 (전체)
+  const categoryBuckets = await prisma.draft.groupBy({
+    by: ["seoCategory"],
+    _count: { _all: true },
+    where: { seoCategory: { not: null } },
+  });
+  const categoryData = categoryBuckets
+    .map((b) => ({
+      category: (b.seoCategory ?? "미분류").slice(0, 14),
+      count: b._count._all,
+    }))
+    .filter((c) => c.count > 0);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-8 sm:py-10 space-y-8">
@@ -116,34 +145,48 @@ export default async function DashboardHome() {
         </Link>
       </section>
 
+      {totalCount > 0 && (
+        <section className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
+          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft lg:col-span-2">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground">최근 6개월 작성 추이</h2>
+              <span className="text-[10px] text-muted-foreground">월별 작성 편수</span>
+            </div>
+            <MonthlyTrendChart data={monthlyBuckets.map(({ month, count }) => ({ month, count }))} />
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground">상태별 분포</h2>
+            </div>
+            <StatusDonutChart data={statusData} />
+          </div>
+
+          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft lg:col-span-3">
+            <div className="mb-2 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-foreground">카테고리별 분포</h2>
+              <span className="text-[10px] text-muted-foreground">
+                상위 6개 카테고리
+              </span>
+            </div>
+            <CategoryBarsChart data={categoryData} />
+          </div>
+        </section>
+      )}
+
       <section>
         <div className="mb-3 flex items-end justify-between">
-          <h2 className="text-sm font-semibold text-foreground">
-            최근 작성한 리뷰
-          </h2>
-          <span className="text-xs text-muted-foreground">
-            {recentDrafts.length}편 표시 / 전체 {totalCount}편
-          </span>
+          <h2 className="text-sm font-semibold text-foreground">최근 작성한 리뷰</h2>
+          <Link
+            href="/drafts"
+            className="text-xs text-primary hover:underline"
+          >
+            전체 보관함 →
+          </Link>
         </div>
 
         {recentDrafts.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-muted/30 px-6 py-14 text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-surface text-muted-foreground shadow-soft">
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M4 4h12l4 4v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
-                <path d="M16 4v4h4" />
-                <path d="M8 13h8M8 17h5" />
-              </svg>
-            </div>
             <p className="text-sm font-medium text-foreground">
               아직 작성한 리뷰가 없어요
             </p>
@@ -153,51 +196,20 @@ export default async function DashboardHome() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {recentDrafts.map((d) => {
-              const cover = d.photos[0]?.publicUrl;
-              const displayTitle =
-                d.title ?? d.placeName ?? "제목 없는 초안";
-              return (
-                <Link
-                  key={d.id}
-                  href={`/preview/${d.id}`}
-                  className="group flex flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-soft transition-all hover:border-primary/40 hover:shadow-lift"
-                >
-                  <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
-                    {cover ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={cover}
-                        alt=""
-                        className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                        사진 없음
-                      </div>
-                    )}
-                    <span
-                      className={`absolute top-2 left-2 rounded-full px-2 py-0.5 text-[10px] font-medium ${STATUS_STYLE[d.status] ?? "bg-muted text-muted-foreground"}`}
-                    >
-                      {STATUS_LABEL[d.status] ?? d.status}
-                    </span>
-                  </div>
-                  <div className="flex flex-1 flex-col p-4">
-                    <div className="font-semibold text-sm text-foreground line-clamp-2">
-                      {displayTitle}
-                    </div>
-                    {d.placeName && d.title && (
-                      <div className="mt-0.5 text-[11px] text-muted-foreground line-clamp-1">
-                        {d.placeName}
-                      </div>
-                    )}
-                    <div className="mt-auto pt-3 text-[11px] text-muted-foreground">
-                      {formatRelative(d.updatedAt)}
-                    </div>
-                  </div>
-                </Link>
-              );
-            })}
+            {recentDrafts.map((d) => (
+              <DraftCard
+                key={d.id}
+                draft={{
+                  id: d.id,
+                  title: d.title,
+                  placeName: d.placeName,
+                  seoCategory: d.seoCategory,
+                  status: d.status,
+                  updatedAt: d.updatedAt,
+                  coverUrl: d.photos[0]?.publicUrl ?? undefined,
+                }}
+              />
+            ))}
           </div>
         )}
       </section>

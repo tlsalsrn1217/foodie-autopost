@@ -49,7 +49,7 @@ const SettingsIcon = (
 const MAIN: Item[] = [
   { href: "/", label: "홈", icon: HomeIcon },
   { href: "/compose", label: "새 리뷰", icon: ComposeIcon },
-  { href: "/drafts", label: "보관함", icon: ArchiveIcon, soon: true },
+  { href: "/drafts", label: "보관함", icon: ArchiveIcon },
   { href: "/published", label: "발행 기록", icon: SendIcon, soon: true },
 ];
 
