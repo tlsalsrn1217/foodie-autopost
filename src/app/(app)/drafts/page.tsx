@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import { DraftsBrowser } from "@/components/drafts/DraftsBrowser";
+import { extractRegion } from "@/lib/region";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function DraftsPage() {
     status: d.status,
     updatedAt: d.updatedAt,
     coverUrl: d.photos[0]?.publicUrl ?? undefined,
+    region: extractRegion(d.placeAddr),
   }));
 
   return (

@@ -5,7 +5,7 @@ import { DraftCard, type DraftCardData } from "./DraftCard";
 import { cn } from "@/lib/utils";
 
 type DraftItem = DraftCardData & {
-  // (no extras for now — same shape)
+  region: string;
 };
 
 type Props = {
@@ -21,39 +21,46 @@ const STATUS_FILTERS: Array<{ value: string; label: string }> = [
   { value: "FAILED", label: "실패" },
 ];
 
-type ViewMode = "folder" | "grid";
+type ViewMode = "category" | "region" | "grid";
 
 export function DraftsBrowser({ drafts }: Props) {
   const [status, setStatus] = useState<string>("ALL");
   const [query, setQuery] = useState<string>("");
-  const [view, setView] = useState<ViewMode>("folder");
+  const [view, setView] = useState<ViewMode>("category");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return drafts.filter((d) => {
       if (status !== "ALL" && d.status !== status) return false;
       if (q) {
-        const hay = `${d.title ?? ""} ${d.placeName ?? ""} ${d.seoCategory ?? ""}`.toLowerCase();
+        const hay =
+          `${d.title ?? ""} ${d.placeName ?? ""} ${d.seoCategory ?? ""} ${d.region}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
     });
   }, [drafts, status, query]);
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, DraftItem[]>();
-    for (const d of filtered) {
-      const key = d.seoCategory?.trim() || "미분류";
-      const arr = map.get(key) ?? [];
+  const groupBy = (key: "category" | "region") =>
+    [...filtered.reduce((acc, d) => {
+      const k =
+        key === "category"
+          ? d.seoCategory?.trim() || "미분류"
+          : d.region || "미지정";
+      const arr = acc.get(k) ?? [];
       arr.push(d);
-      map.set(key, arr);
-    }
-    return [...map.entries()].sort((a, b) => {
-      if (a[0] === "미분류") return 1;
-      if (b[0] === "미분류") return -1;
+      acc.set(k, arr);
+      return acc;
+    }, new Map<string, DraftItem[]>()).entries()].sort((a, b) => {
+      const aMisc = a[0] === "미분류" || a[0] === "미지정";
+      const bMisc = b[0] === "미분류" || b[0] === "미지정";
+      if (aMisc && !bMisc) return 1;
+      if (bMisc && !aMisc) return -1;
       return b[1].length - a[1].length;
     });
-  }, [filtered]);
+
+  const groupedByCategory = useMemo(() => groupBy("category"), [filtered]);
+  const groupedByRegion = useMemo(() => groupBy("region"), [filtered]);
 
   const totalAll = drafts.length;
   const totalFiltered = filtered.length;
@@ -85,18 +92,30 @@ export function DraftsBrowser({ drafts }: Props) {
             <path d="m21 21-4.3-4.3" />
           </svg>
         </div>
-        <div className="inline-flex rounded-md border border-border bg-surface p-0.5 text-xs self-start">
+        <div className="inline-flex flex-wrap rounded-md border border-border bg-surface p-0.5 text-xs self-start">
           <button
             type="button"
-            onClick={() => setView("folder")}
+            onClick={() => setView("category")}
             className={cn(
               "rounded-sm px-3 py-1.5 font-medium transition-colors",
-              view === "folder"
+              view === "category"
                 ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
             카테고리별
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("region")}
+            className={cn(
+              "rounded-sm px-3 py-1.5 font-medium transition-colors",
+              view === "region"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            지역별
           </button>
           <button
             type="button"
@@ -163,14 +182,16 @@ export function DraftsBrowser({ drafts }: Props) {
             <DraftCard key={d.id} draft={d} />
           ))}
         </div>
+      ) : view === "region" ? (
+        <div className="space-y-6">
+          {groupedByRegion.map(([region, items]) => (
+            <Folder key={region} label={region} icon="region" items={items} />
+          ))}
+        </div>
       ) : (
         <div className="space-y-6">
-          {grouped.map(([category, items]) => (
-            <CategoryFolder
-              key={category}
-              category={category}
-              items={items}
-            />
+          {groupedByCategory.map(([category, items]) => (
+            <Folder key={category} label={category} icon="category" items={items} />
           ))}
         </div>
       )}
@@ -178,11 +199,13 @@ export function DraftsBrowser({ drafts }: Props) {
   );
 }
 
-function CategoryFolder({
-  category,
+function Folder({
+  label,
+  icon,
   items,
 }: {
-  category: string;
+  label: string;
+  icon: "category" | "region";
   items: DraftItem[];
 }) {
   const [open, setOpen] = useState(true);
@@ -210,7 +233,17 @@ function CategoryFolder({
           >
             <path d="m9 18 6-6-6-6" />
           </svg>
-          <span className="text-sm font-semibold text-foreground">{category}</span>
+          {icon === "region" ? (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+              <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" />
+              <circle cx="12" cy="10" r="3" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="text-primary">
+              <path d="M3 7a2 2 0 0 1 2-2h4l2 3h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z" />
+            </svg>
+          )}
+          <span className="text-sm font-semibold text-foreground">{label}</span>
           <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground tabular-nums">
             {items.length}
           </span>

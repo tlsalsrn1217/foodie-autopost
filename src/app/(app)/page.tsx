@@ -1,11 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { DraftCard } from "@/components/drafts/DraftCard";
-import {
-  CategoryBarsChart,
-  MonthlyTrendChart,
-  StatusDonutChart,
-} from "@/components/dashboard/DashboardCharts";
+import { HabitTracking } from "@/components/dashboard/HabitTracking";
 
 export const dynamic = "force-dynamic";
 
@@ -34,12 +30,11 @@ function StatCard({ label, value, sub }: StatProps) {
   );
 }
 
-function startOfMonthKST(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), 1);
-}
-
-function monthLabel(d: Date) {
-  return `${d.getMonth() + 1}월`;
+function dateKey(d: Date) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 export default async function DashboardHome() {
@@ -49,64 +44,32 @@ export default async function DashboardHome() {
   const weekStart = new Date(now);
   weekStart.setDate(weekStart.getDate() - weekStart.getDay());
   weekStart.setHours(0, 0, 0, 0);
-  const monthStart = startOfMonthKST(now);
-  const sixMonthsAgo = startOfMonthKST(new Date(now.getFullYear(), now.getMonth() - 5, 1));
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const heatmapStart = new Date(now);
+  heatmapStart.setDate(heatmapStart.getDate() - 90);
+  heatmapStart.setHours(0, 0, 0, 0);
 
-  const [recentDrafts, totalCount, weekCount, monthCount, allForCharts] = await Promise.all([
+  const [recentDrafts, totalCount, weekCount, monthCount, recent90] = await Promise.all([
     prisma.draft.findMany({
       orderBy: { updatedAt: "desc" },
       take: 9,
-      include: {
-        photos: {
-          orderBy: { order: "asc" },
-          take: 1,
-        },
-      },
+      include: { photos: { orderBy: { order: "asc" }, take: 1 } },
     }),
     prisma.draft.count(),
     prisma.draft.count({ where: { createdAt: { gte: weekStart } } }),
     prisma.draft.count({ where: { createdAt: { gte: monthStart } } }),
     prisma.draft.findMany({
-      where: { createdAt: { gte: sixMonthsAgo } },
-      select: { createdAt: true, status: true, seoCategory: true },
+      where: { createdAt: { gte: heatmapStart } },
+      select: { createdAt: true },
     }),
   ]);
 
-  // 월별 작성 추이 (최근 6개월)
-  const monthlyBuckets: Array<{ key: string; month: string; count: number }> = [];
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    monthlyBuckets.push({ key, month: monthLabel(d), count: 0 });
+  // 일별 작성 편수 집계
+  const dailyCounts: Record<string, number> = {};
+  for (const d of recent90) {
+    const k = dateKey(d.createdAt);
+    dailyCounts[k] = (dailyCounts[k] ?? 0) + 1;
   }
-  for (const d of allForCharts) {
-    const key = `${d.createdAt.getFullYear()}-${String(d.createdAt.getMonth() + 1).padStart(2, "0")}`;
-    const b = monthlyBuckets.find((x) => x.key === key);
-    if (b) b.count++;
-  }
-
-  // 상태별 분포 (전체 데이터 기준으로 다시 집계)
-  const statusBuckets = await prisma.draft.groupBy({
-    by: ["status"],
-    _count: { _all: true },
-  });
-  const statusData = statusBuckets.map((b) => ({
-    status: b.status,
-    count: b._count._all,
-  }));
-
-  // 카테고리별 분포 (전체)
-  const categoryBuckets = await prisma.draft.groupBy({
-    by: ["seoCategory"],
-    _count: { _all: true },
-    where: { seoCategory: { not: null } },
-  });
-  const categoryData = categoryBuckets
-    .map((b) => ({
-      category: (b.seoCategory ?? "미분류").slice(0, 14),
-      count: b._count._all,
-    }))
-    .filter((c) => c.count > 0);
 
   return (
     <main className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-8 sm:py-10 space-y-8">
@@ -122,6 +85,8 @@ export default async function DashboardHome() {
         <StatCard label="이번 달" value={monthCount} sub="편" />
         <StatCard label="전체" value={totalCount} sub="편" />
       </section>
+
+      <HabitTracking dailyCounts={dailyCounts} />
 
       <section>
         <Link
@@ -145,42 +110,10 @@ export default async function DashboardHome() {
         </Link>
       </section>
 
-      {totalCount > 0 && (
-        <section className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft lg:col-span-2">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground">최근 6개월 작성 추이</h2>
-              <span className="text-[10px] text-muted-foreground">월별 작성 편수</span>
-            </div>
-            <MonthlyTrendChart data={monthlyBuckets.map(({ month, count }) => ({ month, count }))} />
-          </div>
-
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground">상태별 분포</h2>
-            </div>
-            <StatusDonutChart data={statusData} />
-          </div>
-
-          <div className="rounded-xl border border-border bg-surface p-5 shadow-soft lg:col-span-3">
-            <div className="mb-2 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-foreground">카테고리별 분포</h2>
-              <span className="text-[10px] text-muted-foreground">
-                상위 6개 카테고리
-              </span>
-            </div>
-            <CategoryBarsChart data={categoryData} />
-          </div>
-        </section>
-      )}
-
       <section>
         <div className="mb-3 flex items-end justify-between">
           <h2 className="text-sm font-semibold text-foreground">최근 작성한 리뷰</h2>
-          <Link
-            href="/drafts"
-            className="text-xs text-primary hover:underline"
-          >
+          <Link href="/drafts" className="text-xs text-primary hover:underline">
             전체 보관함 →
           </Link>
         </div>
