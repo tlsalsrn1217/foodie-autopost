@@ -10,6 +10,7 @@ import {
   type DraftFormValues,
 } from "@/lib/schemas/draftFormSchema";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
+import { compressImage } from "@/lib/imageCompress";
 import { PhotoDropzone } from "@/components/compose/PhotoDropzone";
 import { MoodInput } from "@/components/compose/MoodInput";
 import { KeywordChips } from "@/components/compose/KeywordChips";
@@ -26,6 +27,7 @@ import {
 type Stage =
   | { kind: "idle" }
   | { kind: "creating" } // /api/draft 호출 중
+  | { kind: "compressing"; done: number; total: number } // 클라이언트 압축
   | { kind: "signing" } // /api/draft/[id]/upload-urls 호출 중
   | { kind: "uploading"; done: number; total: number } // 사진 직접 업로드 진행
   | { kind: "committing" } // /api/draft/[id]/photos 기록 중
@@ -80,13 +82,26 @@ export default function ComposePage() {
       if (!createRes.ok) throw new Error(`Draft 생성 실패 (${createRes.status})`);
       const { draftId } = (await createRes.json()) as { draftId: string };
 
-      // 2) signed upload URL 발급 (서버 → Supabase)
+      // 2) 클라이언트 사진 압축 — Naver 블로그 붙여넣기 호환 + 용량/대역폭 절약
+      setStage({ kind: "compressing", done: 0, total: values.photos.length });
+      const compressed: File[] = [];
+      for (let i = 0; i < values.photos.length; i++) {
+        const c = await compressImage(values.photos[i]);
+        compressed.push(c);
+        setStage({
+          kind: "compressing",
+          done: i + 1,
+          total: values.photos.length,
+        });
+      }
+
+      // 3) signed upload URL 발급 (서버 → Supabase)
       setStage({ kind: "signing" });
       const signRes = await fetch(`/api/draft/${draftId}/upload-urls`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          files: values.photos.map((f) => ({
+          files: compressed.map((f) => ({
             mimeType: f.type || "image/jpeg",
             filename: f.name,
           })),
@@ -103,7 +118,7 @@ export default function ComposePage() {
         }>;
       };
 
-      // 3) 브라우저 → Supabase 직접 업로드 (Vercel 4.5MB 한도 우회)
+      // 4) 브라우저 → Supabase 직접 업로드 (Vercel 4.5MB 한도 우회)
       setStage({ kind: "uploading", done: 0, total: slots.length });
       let done = 0;
       // 동시 업로드 — 모바일 네트워크 고려해 4개씩 묶음
@@ -116,7 +131,7 @@ export default function ComposePage() {
             while (queue.length > 0) {
               const slot = queue.shift();
               if (!slot) break;
-              await uploadOnePhoto(slot, values.photos[slot.order]);
+              await uploadOnePhoto(slot, compressed[slot.order]);
               done++;
               setStage({ kind: "uploading", done, total: slots.length });
             }
@@ -251,6 +266,17 @@ export default function ComposePage() {
         {stage.kind !== "idle" && stage.kind !== "error" && (
           <div className="rounded-md border border-primary/40 bg-primary/5 px-4 py-3 text-sm">
             {stage.kind === "creating" && "초안 생성 중..."}
+            {stage.kind === "compressing" && (
+              <>
+                사진 최적화 중 ({stage.done}/{stage.total}) — 블로그 호환 사이즈로 변환
+                <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-primary/20">
+                  <div
+                    className="h-full bg-primary transition-all duration-200"
+                    style={{ width: `${(stage.done / stage.total) * 100}%` }}
+                  />
+                </div>
+              </>
+            )}
             {stage.kind === "signing" && "사진 업로드 준비 중..."}
             {stage.kind === "uploading" && (
               <>
