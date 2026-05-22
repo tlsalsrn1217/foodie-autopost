@@ -11,7 +11,6 @@ import {
 } from "@/lib/schemas/draftFormSchema";
 import { getSupabaseBrowser } from "@/lib/supabaseBrowser";
 import { compressImage } from "@/lib/imageCompress";
-import { MobilePreview } from "@/components/compose/MobilePreview";
 import { PhotoDropzone } from "@/components/compose/PhotoDropzone";
 import { MoodInput } from "@/components/compose/MoodInput";
 import { KeywordChips } from "@/components/compose/KeywordChips";
@@ -41,7 +40,6 @@ export default function ComposePage() {
   const {
     control,
     handleSubmit,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<DraftFormValues>({
     resolver: zodResolver(draftFormSchema),
@@ -167,24 +165,17 @@ export default function ComposePage() {
 
   const isBusy = stage.kind !== "idle" && stage.kind !== "error";
 
-  // Mobile preview 용 실시간 값
-  const watchedMood = watch("mood");
-  const watchedKeywords = watch("keywords");
-  const watchedPlace = watch("place");
-  const watchedPhotos = watch("photos");
-
   return (
-    <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 py-8 sm:py-10">
-      <header className="mb-6 text-left">
-        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-          포스트 생성
+    <main className="mx-auto w-full max-w-3xl px-4 py-10 sm:py-16">
+      <header className="mb-8 sm:mb-12">
+        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
+          새 리뷰 만들기
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          좌측에 정보를 입력하면 우측 미리보기에 실시간으로 반영돼요.
+        <p className="mt-2 text-muted-foreground">
+          사진과 짧은 메모만 있으면 충분해요. 나머지는 AI가 받아 적을게요.
         </p>
       </header>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 items-start">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
         <Card>
           <CardHeader>
@@ -211,9 +202,9 @@ export default function ComposePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>방문 목적 · 인상</CardTitle>
+            <CardTitle>한 줄 감상</CardTitle>
             <CardDescription>
-              누구와 / 왜 갔는지, 짧은 첫인상을 솔직하게.
+              방문 인상을 짧게. 솔직할수록 좋아요.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -235,9 +226,9 @@ export default function ComposePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>SEO · 장단점 키워드</CardTitle>
+            <CardTitle>키워드</CardTitle>
             <CardDescription>
-              검색에 노출시키고 싶은 키워드 + 장단점 키워드를 섞어서. 엔터로 추가, 최대 10개.
+              포인트 단어들. 엔터로 추가, 최대 10개.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -254,11 +245,11 @@ export default function ComposePage() {
         <Card>
           <CardHeader>
             <CardTitle>
-              <span>식당 정보</span>{" "}
+              <span>가게 정보</span>{" "}
               <span className="text-xs font-normal text-muted-foreground">(선택)</span>
             </CardTitle>
             <CardDescription>
-              검색해서 선택하면 식당 이름·주소·지도가 자동으로 들어가요.
+              검색해서 선택하면 글에 지도가 함께 들어가요.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -331,7 +322,7 @@ export default function ComposePage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between gap-3 pt-2">
+        <div className="flex items-center justify-end gap-3 pt-2">
           <Button
             type="button"
             variant="ghost"
@@ -341,21 +332,10 @@ export default function ComposePage() {
             취소
           </Button>
           <Button type="submit" size="lg" disabled={isBusy || isSubmitting}>
-            {isBusy ? "처리 중..." : "AI 원고 생성 →"}
+            {isBusy ? "처리 중..." : "AI 리뷰 생성 →"}
           </Button>
         </div>
       </form>
-
-      <aside className="lg:sticky lg:top-6">
-        <MobilePreview
-          restaurantName={watchedPlace?.name}
-          mood={watchedMood ?? undefined}
-          keywords={watchedKeywords ?? []}
-          place={watchedPlace}
-          photos={watchedPhotos ?? []}
-        />
-      </aside>
-      </div>
     </main>
   );
 }

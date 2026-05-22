@@ -98,7 +98,7 @@ export default async function DashboardHome() {
               +
             </div>
             <div className="flex-1 min-w-0">
-              <div className="font-semibold text-foreground">새 포스트 생성</div>
+              <div className="font-semibold text-foreground">새 리뷰 만들기</div>
               <div className="text-sm text-muted-foreground mt-0.5">
                 사진과 짧은 메모만 있으면 충분해요
               </div>

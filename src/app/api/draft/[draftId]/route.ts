@@ -12,9 +12,7 @@ const patchSchema = z.object({
   seoSummary: z.string().nullable().optional(),
   seoCategory: z.string().nullable().optional(),
   seoTags: z.array(z.string()).optional(),
-  status: z
-    .enum(["DRAFTING", "GENERATING", "READY", "SCHEDULED", "PUBLISHED", "FAILED"])
-    .optional(),
+  status: z.enum(["DRAFTING", "GENERATING", "READY", "PUBLISHED", "FAILED"]).optional(),
   publishedAt: z.string().datetime().nullable().optional(),
 });
 

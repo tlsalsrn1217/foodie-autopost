@@ -6,7 +6,7 @@ export function TopBar({ title }: { title?: string }) {
       <div className="flex items-center gap-3 lg:hidden">
         <Link href="/" className="flex items-center gap-2">
           <span className="inline-block h-6 w-6 rounded-md bg-gradient-to-br from-primary to-accent" />
-          <span className="text-sm font-bold">Jamchelin</span>
+          <span className="text-sm font-bold">푸디</span>
         </Link>
       </div>
       {title && (
