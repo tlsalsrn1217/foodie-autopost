@@ -80,6 +80,20 @@ export type SignedUploadSlot = {
   mimeType: string;
 };
 
+// draft 삭제 시 해당 draft 의 사진을 Storage 에서 제거.
+// 실패해도 throw 하지 않음 — DB 정리는 진행되도록 (orphan 파일은 추후 cleanup)
+export async function deleteDraftPhotos(storageKeys: string[]): Promise<void> {
+  if (storageKeys.length === 0) return;
+  try {
+    const { error } = await supabaseAdmin.storage.from(BUCKET).remove(storageKeys);
+    if (error) {
+      console.warn("[storage] photo delete failed:", error.message);
+    }
+  } catch (e) {
+    console.warn("[storage] photo delete threw:", e);
+  }
+}
+
 export async function createPhotoUploadSlots(
   draftId: string,
   files: Array<{ mimeType: string; filename?: string }>,

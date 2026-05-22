@@ -3,6 +3,7 @@ import Link from "next/link";
 import { prisma } from "@/lib/db";
 import { ReviewWorkspace } from "@/components/preview/ReviewWorkspace";
 import { PublishActions } from "@/components/preview/PublishActions";
+import { DeleteDraftButton } from "@/components/preview/DeleteDraftButton";
 
 export const dynamic = "force-dynamic";
 
@@ -127,6 +128,14 @@ export default async function PreviewPage({
           </div>
         </div>
       </details>
+
+      <div className="mt-10">
+        <DeleteDraftButton
+          draftId={draft.id}
+          title={draft.title}
+          placeName={draft.placeName}
+        />
+      </div>
     </main>
   );
 }

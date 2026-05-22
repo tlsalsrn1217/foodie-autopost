@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
+import { deleteDraftPhotos } from "@/lib/storage";
 
 export const runtime = "nodejs";
 
@@ -104,6 +105,33 @@ export async function PATCH(
     return NextResponse.json(updated);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "업데이트 실패";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  _req: Request,
+  ctx: { params: Promise<{ draftId: string }> },
+) {
+  const { draftId } = await ctx.params;
+
+  const draft = await prisma.draft.findUnique({
+    where: { id: draftId },
+    include: { photos: { select: { storageKey: true } } },
+  });
+  if (!draft) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // Storage 의 사진 파일 먼저 정리 (실패해도 진행)
+  await deleteDraftPhotos(draft.photos.map((p) => p.storageKey));
+
+  try {
+    // Photo 는 onDelete: Cascade 라 Draft 삭제만으로 같이 사라짐
+    await prisma.draft.delete({ where: { id: draftId } });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "삭제 실패";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
