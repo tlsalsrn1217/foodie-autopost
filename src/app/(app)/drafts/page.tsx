@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/db";
-import { DraftsBrowser } from "@/components/drafts/DraftsBrowser";
+import { KanbanBoard } from "@/components/drafts/KanbanBoard";
 import { extractRegion } from "@/lib/region";
 
 export const dynamic = "force-dynamic";
@@ -22,15 +22,15 @@ export default async function DraftsPage() {
   }));
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 sm:px-6 py-8 sm:py-10 space-y-6">
-      <header>
+    <main className="mx-auto w-full max-w-7xl px-4 sm:px-6 py-8 sm:py-10 space-y-6">
+      <header className="text-left">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">보관함</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          지금까지 작성한 모든 리뷰를 카테고리별로 정리해서 봅니다.
+          상태별 칸반 보드. 드래그로 단계를 이동시키면 자동 저장됩니다.
         </p>
       </header>
 
-      <DraftsBrowser drafts={items} />
+      <KanbanBoard drafts={items} />
     </main>
   );
 }

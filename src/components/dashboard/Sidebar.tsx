@@ -46,6 +46,13 @@ const EyeIcon = (
   </svg>
 );
 
+const PersonaIcon = (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21v-1a8 8 0 0 1 16 0v1" />
+  </svg>
+);
+
 const SettingsIcon = (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -54,15 +61,15 @@ const SettingsIcon = (
 );
 
 const MAIN: Item[] = [
-  { href: "/", label: "홈", icon: HomeIcon },
-  { href: "/compose", label: "새 리뷰", icon: ComposeIcon },
+  { href: "/", label: "대시보드", icon: HomeIcon },
+  { href: "/compose", label: "포스트 생성", icon: ComposeIcon },
+  { href: "/persona", label: "페르소나 스튜디오", icon: PersonaIcon },
   { href: "/drafts", label: "보관함", icon: ArchiveIcon },
-  { href: "/mockup", label: "디자인 미리보기", icon: EyeIcon },
-  { href: "/published", label: "발행 기록", icon: SendIcon, soon: true },
 ];
 
 const FOOTER: Item[] = [
-  { href: "/settings", label: "설정", icon: SettingsIcon, soon: true },
+  { href: "/settings", label: "설정", icon: SettingsIcon },
+  { href: "/mockup", label: "디자인 미리보기", icon: EyeIcon },
 ];
 
 export function Sidebar() {
@@ -105,8 +112,8 @@ export function Sidebar() {
       <div className="flex h-16 items-center gap-2 px-5 border-b border-border/60">
         <span className="inline-block h-7 w-7 rounded-md bg-gradient-to-br from-primary to-accent" />
         <div>
-          <div className="text-sm font-bold tracking-tight">푸디</div>
-          <div className="text-[10px] text-muted-foreground -mt-0.5">개인 음식 일지</div>
+          <div className="text-sm font-bold tracking-tight">Jamchelin Studio</div>
+          <div className="text-[10px] text-muted-foreground -mt-0.5">잼슐랭 스튜디오</div>
         </div>
       </div>
 
