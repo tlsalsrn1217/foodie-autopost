@@ -1,14 +1,35 @@
 import { z } from "zod";
 
-const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
-const ACCEPTED_MIME = ["image/jpeg", "image/png", "image/webp", "image/heic"];
+const MAX_PHOTO_BYTES = 20 * 1024 * 1024; // 20MB — 최신 휴대폰 원본 사진 대응
+
+// 폭넓게 허용 — 표준 이미지 포맷이면 통과
+const ACCEPTED_MIME = [
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+  "image/avif",
+  "image/gif",
+  "image/bmp",
+];
+const ACCEPTED_EXT = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".avif", ".gif", ".bmp"];
+
+function hasAcceptedExt(filename: string): boolean {
+  const lower = filename.toLowerCase();
+  return ACCEPTED_EXT.some((ext) => lower.endsWith(ext));
+}
 
 export const photoFileSchema = z
   .instanceof(File)
-  .refine((f) => f.size <= MAX_PHOTO_BYTES, "사진은 8MB 이하만 가능해요")
+  .refine((f) => f.size <= MAX_PHOTO_BYTES, "사진은 20MB 이하만 올릴 수 있어요")
   .refine(
-    (f) => ACCEPTED_MIME.includes(f.type) || f.name.toLowerCase().endsWith(".heic"),
-    "JPG, PNG, WebP, HEIC만 지원해요",
+    (f) =>
+      ACCEPTED_MIME.includes(f.type) ||
+      // 일부 브라우저는 type 을 비워서 보냄 — 확장자로 폴백
+      hasAcceptedExt(f.name),
+    "지원하지 않는 형식이에요 (JPG·PNG·WebP·HEIC·AVIF 등)",
   );
 
 export const placeSchema = z.object({

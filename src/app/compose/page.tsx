@@ -273,6 +273,29 @@ export default function ComposePage() {
           </div>
         )}
 
+        {/* 폼 검증 실패 시 — 어디서 막혔는지 한눈에 */}
+        {Object.keys(errors).length > 0 && (
+          <div className="rounded-md border border-danger/40 bg-danger/5 px-4 py-3 text-sm text-danger space-y-1">
+            <div className="font-semibold">입력에 문제가 있어요</div>
+            <ul className="list-disc list-inside text-xs">
+              {errors.photos && (
+                <li>
+                  사진: {(errors.photos as { message?: string }).message ?? "확인 필요"}
+                </li>
+              )}
+              {errors.mood && <li>한 줄 감상: {errors.mood.message}</li>}
+              {errors.keywords && (
+                <li>
+                  키워드: {(errors.keywords as { message?: string }).message ?? "확인 필요"}
+                </li>
+              )}
+              {errors.place && (
+                <li>가게 정보: 형식이 올바르지 않아요</li>
+              )}
+            </ul>
+          </div>
+        )}
+
         <div className="flex items-center justify-end gap-3 pt-2">
           <Button
             type="button"
