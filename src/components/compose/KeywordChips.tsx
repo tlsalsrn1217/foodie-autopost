@@ -37,6 +37,9 @@ export function KeywordChips({ value, onChange, max = 10 }: Props) {
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    // 한글/일본어 IME 조합 중인 Enter 는 무시 — 두 번 칩 생성 방지
+    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+
     if (e.key === "Enter" || e.key === ",") {
       e.preventDefault();
       add(draft);
