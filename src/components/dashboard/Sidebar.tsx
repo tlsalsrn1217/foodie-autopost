@@ -39,6 +39,13 @@ const SendIcon = (
   </svg>
 );
 
+const EyeIcon = (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
 const SettingsIcon = (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="3" />
@@ -50,6 +57,7 @@ const MAIN: Item[] = [
   { href: "/", label: "홈", icon: HomeIcon },
   { href: "/compose", label: "새 리뷰", icon: ComposeIcon },
   { href: "/drafts", label: "보관함", icon: ArchiveIcon },
+  { href: "/mockup", label: "디자인 미리보기", icon: EyeIcon },
   { href: "/published", label: "발행 기록", icon: SendIcon, soon: true },
 ];
 
