@@ -2,6 +2,7 @@ import "server-only";
 import { supabaseAdmin } from "./supabase";
 
 const BUCKET = "photos";
+const BUCKET_FILE_SIZE_LIMIT = 20 * 1024 * 1024; // 20MB — Zod schema 와 동일
 
 let bucketReady = false;
 
@@ -12,11 +13,19 @@ async function ensureBucket() {
   if (!exists) {
     const { error } = await supabaseAdmin.storage.createBucket(BUCKET, {
       public: true,
-      fileSizeLimit: 10 * 1024 * 1024,
+      fileSizeLimit: BUCKET_FILE_SIZE_LIMIT,
     });
     if (error && !/already exists/i.test(error.message)) {
       throw new Error(`Failed to create bucket: ${error.message}`);
     }
+  } else {
+    // 기존 버킷의 한도를 최신 설정으로 동기화 (이전 배포에서 10MB 로 만든 경우 대비)
+    await supabaseAdmin.storage
+      .updateBucket(BUCKET, {
+        public: true,
+        fileSizeLimit: BUCKET_FILE_SIZE_LIMIT,
+      })
+      .catch(() => {});
   }
   bucketReady = true;
 }
